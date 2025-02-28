@@ -1,5 +1,6 @@
 import math
 
+
 def classify_news(probability_real, model_entropy, user_votes,
                   w_ai_base=0.5, w_user_base=0.5, min_votes=1,
                   threshold_real=0.34, threshold_fake=-0.34):
@@ -95,4 +96,3 @@ def classify_news(probability_real, model_entropy, user_votes,
         classification = "Not Sure"
 
     return final_score, classification
-

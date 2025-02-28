@@ -3,8 +3,6 @@ from flask_cors import CORS
 from API_routes import api
 
 
-# -------- --------
-
 # -------- Initialise Flask --------
 app = Flask(__name__)
 CORS(app)
