@@ -3,9 +3,11 @@ from AImodel import load_model, model_predict
 import firebase_admin
 from firebase_admin import credentials, firestore
 from checked_algorithm import classify_news
+import math
+import re
 
 #from adlina's scraping file
-from scrapfly_scraper import scrape_single_tweet
+# from scrapfly_scraper import scrape_single_tweet
 
 
 
@@ -62,28 +64,67 @@ def fetch_post():
 
 
 # -------- GET Prediction (run model) --------
+# @api.route("/predict", methods=["POST"])
+# def predict():
+#     try:
+#         data = request.get_json()
+#         text = data.get("text")
+#         post_id = data.get("post_id")  # new field for the tweet/post id
+
+#         if not text:
+#             return jsonify({"error": "No text provided"}), 400
+
+#         # If a post_id is provided, check if a prediction already exists
+#         if post_id:
+#             doc_ref = db.collection("ai_result").document(post_id)
+#             doc = doc_ref.get()
+#             if doc.exists:
+#                 # Return the existing AI result
+#                 return jsonify(doc.to_dict()), 200
+
+#         # Compute prediction as none exists
+#         label, confidence = model_predict(text, model)
+#         result_data = {
+#             "post_id": post_id,
+#             "results": {
+#                 "prediction": label,
+#                 "confidence": confidence
+#             },
+#             "text": text
+#         }
+
+#         # Save the result in Firestore if post_id is provided
+#         if post_id:
+#             db.collection("ai_result").document(post_id).set(result_data)
+
+#         return jsonify(result_data), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 @api.route("/predict", methods=["POST"])
 def predict():
     try:
         data = request.get_json()
         text = data.get("text")
-        post_id = data.get("post_id")  # new field for the tweet/post id
+        post_id = data.get("post_id")
 
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
+        if not text or not post_id:
+            return jsonify({"error": "Missing text or post_id"}), 400
 
-        # If a post_id is provided, check if a prediction already exists
-        if post_id:
-            doc_ref = db.collection("ai_result").document(post_id)
-            doc = doc_ref.get()
-            if doc.exists:
-                # Return the existing AI result
-                return jsonify(doc.to_dict()), 200
+        # 🔹 Convert post_id to Firestore-safe format
+        safe_post_id = re.sub(r'[:/.]', '-', post_id)
 
-        # Compute prediction as none exists
+        # 🔹 Step 1: Check if AI result exists
+        doc_ref = db.collection("ai_result").document(safe_post_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            return jsonify(doc.to_dict()), 200  # Return existing result
+
+        # 🔹 Step 2: Compute AI prediction
         label, confidence = model_predict(text, model)
         result_data = {
-            "post_id": post_id,
+            "post_id": safe_post_id,  # Store safe ID
             "results": {
                 "prediction": label,
                 "confidence": confidence
@@ -91,43 +132,172 @@ def predict():
             "text": text
         }
 
-        # Save the result in Firestore if post_id is provided
-        if post_id:
-            db.collection("ai_result").document(post_id).set(result_data)
+        # 🔹 Step 3: Save AI result in Firestore
+        db.collection("ai_result").document(safe_post_id).set(result_data)
+
+        print(f"[DEBUG] AI prediction stored for post_id: {safe_post_id}")
 
         return jsonify(result_data), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@api.route("/get-ai-result", methods=["GET"])
+def get_ai_result():
+    tweet_url = request.args.get("tweetUrl")
+    if not tweet_url:
+        return jsonify({"error": "Missing tweet URL"}), 400
+
+    tweet_id = tweet_url.split("/")[-1]  # Extract tweet ID from URL
+    doc_ref = db.collection("ai_result").document(tweet_id)
+    doc = doc_ref.get()
+
+    if not doc.exists:
+        # Return an empty object or default values if no AI result exists
+        return jsonify({}), 200
+
+    ai_data = doc.to_dict()
+    return jsonify(ai_data), 200
+
+@api.route("/get-checked-result", methods=["GET"])
+def get_checked_result():
+    tweet_url = request.args.get("tweetUrl")
+    if not tweet_url:
+        return jsonify({"error": "Missing tweet URL"}), 400
+
+    # 🔹 Extract tweet ID from the URL (same as get-vote-count)
+    tweet_id = tweet_url.split("/")[-1]  # Extract only the tweet ID
+    safe_post_id = re.sub(r'[:/.]', '-', tweet_id)  # 🔹 Sanitize tweet ID
+
+    print(f"[DEBUG] Checking for results for post_id: {safe_post_id}")
+
+    # 🔹 Step 1: Check for Checked Algorithm results first
+    checked_doc = db.collection("checkedAlgo_result").document(safe_post_id).get()
+    if checked_doc.exists:
+        print(f"[DEBUG] Returning Checked Algorithm result for {safe_post_id}")
+        return jsonify(checked_doc.to_dict()), 200
+
+    # 🔹 Step 2: If no Checked Algorithm result, return AI result
+    ai_doc = db.collection("ai_result").document(safe_post_id).get()
+    if ai_doc.exists:
+        print(f"[DEBUG] Returning AI result for {safe_post_id}")
+        return jsonify(ai_doc.to_dict()), 200
+
+    # 🔹 Step 3: If neither exists, return an empty response
+    print(f"[DEBUG] No AI or Checked Algorithm result found for {safe_post_id}")
+    return jsonify({"error": "No AI or Checked Algorithm results found"}), 404
 
 # -------- Store user votes and update to database --------
-@api.route("/vote", methods=["POST"])
-def store_user_vote():
-    data = request.get_json()
-    post_id = data.get("post_id")
-    user_id = data.get("user_id")
-    user_votes = data.get("user_votes")
+# @api.route("/vote", methods=["POST"])
+# def store_user_vote():
+#     data = request.get_json()
+#     post_id = data.get("post_id")
+#     user_id = data.get("user_id")
+#     user_votes = data.get("user_votes")
 
-    if not all([post_id, user_id, user_votes]):
-        return jsonify({"error": "Missing required fields"}), 400
+#     if not all([post_id, user_id, user_votes]):
+#         return jsonify({"error": "Missing required fields"}), 400
 
-    save_user_vote(post_id, user_id, user_votes)
+#     save_user_vote(post_id, user_id, user_votes)
 
-    return jsonify({"message": "Vote saved successfully"})
+#     return jsonify({"message": "Vote saved successfully"})
 
 
 # --------- Fetch Final (Checked Algorithm) Results --------
+# @api.route("/result", methods=["GET"])
+# def get_final_results():
+#     post_id = request.args.get("post_id")
+
+#     if not post_id:
+#         return jsonify({"error": "No Post ID detected"}), 400
+
+#     final_results = classify_news(post_id)
+
+#     if "error" in final_results:
+#         return jsonify(final_results), 404
+
+#     return jsonify(final_results)
+
 @api.route("/result", methods=["GET"])
 def get_final_results():
     post_id = request.args.get("post_id")
 
+    # # 🔹 Convert post_id to match the format stored in Firestore
+    # safe_post_id = re.sub(r'[:/.]', '-', post_id)
+
     if not post_id:
         return jsonify({"error": "No Post ID detected"}), 400
+    
+    # 🔹 Convert post_id to match the format stored in Firestore
+    safe_post_id = re.sub(r'[:/.]', '-', post_id)
 
-    final_results = classify_news(post_id)
+    print(f"[DEBUG] Retrieving result for post_id: {post_id}")
 
-    if "error" in final_results:
-        return jsonify(final_results), 404
+    # 🔹 Step 1: Retrieve AI result from Firestore
+    ai_doc = db.collection("ai_result").document(safe_post_id).get()
+    if not ai_doc.exists:  # ✅ FIXED: Removed ()
+        return jsonify({"error": "AI result not found"}), 404
 
-    return jsonify(final_results)
+    ai_data = ai_doc.to_dict()
+    probability_real = ai_data["results"]["confidence"][1]
+
+    # Compute entropy for AI confidence
+    conf = ai_data["results"]["confidence"]
+    model_entropy = - (conf[0] * math.log(conf[0] + 1e-10) + conf[1] * math.log(conf[1] + 1e-10))
+
+    # 🔹 Step 2: Check for votes in `x_posts`
+    post_doc = db.collection("x_posts").document(post_id).get()
+    user_votes = []
+
+    if post_doc.exists:
+        post_data = post_doc.to_dict()
+        votes_count = post_data.get("votes_count", {})
+        total_votes = post_data.get("total_votes", 0)
+
+        print(f"[DEBUG] Total votes: {total_votes}")
+        print(f"[DEBUG] Vote breakdown: {votes_count}")
+
+        # 🔹 If no votes exist, return AI results only
+        if total_votes == 0:
+            return jsonify({
+                "post_id": post_id,
+                "results": ai_data["results"],
+                "message": "No user votes yet, returning AI result only."
+            }), 200
+
+        # Process user votes
+        credibility_per_vote = 1.0 / total_votes if total_votes > 0 else 0.5
+
+        for category, count in votes_count.items():
+            vote_value = 1 if category == "Real" else 0  
+            for _ in range(count):
+                user_votes.append({"vote_value": vote_value, "credibility": credibility_per_vote})
+
+        print(f"[DEBUG] Processed user votes: {user_votes}")
+
+    # 🔹 If no votes exist, return AI results only
+    if not user_votes:
+        return jsonify({
+            "post_id": post_id,
+            "results": ai_data["results"],
+            "message": "No user votes yet, returning AI result only."
+        }), 200
+
+    # 🔹 Step 3: Run Checked Algorithm if votes exist
+    final_score, classification = classify_news(probability_real, model_entropy, user_votes)
+
+    print(f"[DEBUG] Final Score: {final_score}, Classification: {classification}\n")
+
+    # 🔹 Step 4: Save Checked Algorithm result
+    checked_algo_result = {
+        "post_id": post_id,
+        "result": {
+            "final_score": final_score,
+            "classification": classification
+        }
+    }
+
+    db.collection("checkedAlgo_result").document(post_id).set(checked_algo_result)
+    print(f"[DEBUG] Successfully saved result for {post_id} in checkedAlgo_result")
+
+    return jsonify({"final_score": final_score, "classification": classification}), 200
