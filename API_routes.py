@@ -64,44 +64,6 @@ def fetch_post():
 
 
 # -------- GET Prediction (run model) --------
-# @api.route("/predict", methods=["POST"])
-# def predict():
-#     try:
-#         data = request.get_json()
-#         text = data.get("text")
-#         post_id = data.get("post_id")  # new field for the tweet/post id
-
-#         if not text:
-#             return jsonify({"error": "No text provided"}), 400
-
-#         # If a post_id is provided, check if a prediction already exists
-#         if post_id:
-#             doc_ref = db.collection("ai_result").document(post_id)
-#             doc = doc_ref.get()
-#             if doc.exists:
-#                 # Return the existing AI result
-#                 return jsonify(doc.to_dict()), 200
-
-#         # Compute prediction as none exists
-#         label, confidence = model_predict(text, model)
-#         result_data = {
-#             "post_id": post_id,
-#             "results": {
-#                 "prediction": label,
-#                 "confidence": confidence
-#             },
-#             "text": text
-#         }
-
-#         # Save the result in Firestore if post_id is provided
-#         if post_id:
-#             db.collection("ai_result").document(post_id).set(result_data)
-
-#         return jsonify(result_data), 200
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
 @api.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -187,37 +149,7 @@ def get_checked_result():
     print(f"[DEBUG] No AI or Checked Algorithm result found for {safe_post_id}")
     return jsonify({"error": "No AI or Checked Algorithm results found"}), 404
 
-# -------- Store user votes and update to database --------
-# @api.route("/vote", methods=["POST"])
-# def store_user_vote():
-#     data = request.get_json()
-#     post_id = data.get("post_id")
-#     user_id = data.get("user_id")
-#     user_votes = data.get("user_votes")
-
-#     if not all([post_id, user_id, user_votes]):
-#         return jsonify({"error": "Missing required fields"}), 400
-
-#     save_user_vote(post_id, user_id, user_votes)
-
-#     return jsonify({"message": "Vote saved successfully"})
-
-
 # --------- Fetch Final (Checked Algorithm) Results --------
-# @api.route("/result", methods=["GET"])
-# def get_final_results():
-#     post_id = request.args.get("post_id")
-
-#     if not post_id:
-#         return jsonify({"error": "No Post ID detected"}), 400
-
-#     final_results = classify_news(post_id)
-
-#     if "error" in final_results:
-#         return jsonify(final_results), 404
-
-#     return jsonify(final_results)
-
 @api.route("/result", methods=["GET"])
 def get_final_results():
     post_id = request.args.get("post_id")
