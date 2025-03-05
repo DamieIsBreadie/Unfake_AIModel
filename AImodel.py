@@ -10,7 +10,7 @@ class Config:
     MAX_LEN = 512
     BATCH_SIZE = 32
     NUM_WORKERS = 4
-    TEMPERATURE = 6.0
+    TEMPERATURE = 8.0
     MODEL_PATH = "Unfake_v3.pth"
 
 

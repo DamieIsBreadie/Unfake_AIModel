@@ -13,4 +13,3 @@ __pycache__/
 .env
 
 # Ignore .pth files
-*.pth
