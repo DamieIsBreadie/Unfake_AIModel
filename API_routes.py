@@ -5,6 +5,7 @@ from firebase_admin import credentials, firestore
 from checked_algorithm import classify_news
 import math
 import re
+import requests
 
 #from adlina's scraping file
 # from scrapfly_scraper import scrape_single_tweet
@@ -232,4 +233,56 @@ def get_final_results():
     db.collection("checkedAlgo_result").document(post_id).set(checked_algo_result)
     print(f"[DEBUG] Successfully saved result for {post_id} in checkedAlgo_result")
 
+        # 🔹 **Send Data to Blockchain API**
+    try:
+        blockchain_response = requests.post(BLOCKCHAIN_API_URL, json={
+            "post_id": post_id,
+            "ai_score": probability_real,
+            "checked_score": final_score
+        }, timeout=10)
+        blockchain_data = blockchain_response.json()
+        print(f"[DEBUG] Blockchain submission result: {blockchain_data}")
+    except Exception as e:
+        print(f"[ERROR] Failed to submit to blockchain: {e}")
+
     return jsonify({"final_score": final_score, "classification": classification}), 200
+
+BLOCKCHAIN_API_URL = "http://localhost:5002/submit"  # Blockchain API endpoint
+
+@api.route("/send-to-blockchain", methods=["POST"])
+def send_to_blockchain():
+    """
+    This route sends AI results (post_id, ai_score, checked_score) to the Blockchain API.
+    """
+    try:
+        data = request.get_json()
+        post_id = data.get("post_id")
+        ai_score = data.get("ai_score")
+        checked_score = data.get("checked_score")
+
+        if not post_id or ai_score is None or checked_score is None:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Send data to the Blockchain API
+        response = requests.post(BLOCKCHAIN_API_URL, json={
+            "post_id": post_id,
+            "ai_score": ai_score,
+            "checked_score": checked_score
+        }, timeout=10)
+
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to send to blockchain", "details": response.text}), response.status_code
+
+        blockchain_data = response.json()
+        transaction_hash = blockchain_data.get("transaction_hash", "Unknown")
+
+        print(f"✅ Stored Blockchain Transaction Hash in Firebase: {transaction_hash}")  # ✅ Console log hash
+
+        return jsonify({
+            "status": "success",
+            "transaction_hash": transaction_hash,
+            "blockchain_response": blockchain_data
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

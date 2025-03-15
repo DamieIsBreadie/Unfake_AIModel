@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import BertModel, BertTokenizer
+import re
 
 
 # ------------------ Configuration ------------------
@@ -56,6 +57,14 @@ def load_model(model_path="Unfake_v3.pth"):
 # -------- Load BERT Tokenizer --------
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
+def clean_text(text):
+    """
+    Remove extra whitespace and filter out texts with less than 30% alphabetic characters.
+    """
+    text = re.sub(r'\s+', ' ', str(text)).strip()
+    if text and (sum(c.isalpha() for c in text) / len(text)) < 0.3:
+        return ''
+    return text
 
 # -------- Text Preprocessing --------
 def text_preprocessing(text):
