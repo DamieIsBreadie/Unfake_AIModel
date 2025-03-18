@@ -17,8 +17,8 @@ AI Model API (Flask backend with BERT model)
 Blockchain API
 Scraper API (Tweet scraping with Playwright)
 
-git clone https://github.com/DamieIsBreadie/Unfake_AIModel
-git clone https://github.com/DamieIsBreadie/blockchain_transactions
+\ngit clone https://github.com/DamieIsBreadie/Unfake_AIModel\n
+git clone https://github.com/DamieIsBreadie/blockchain_transactions\n
 git clone https://github.com/DamieIsBreadie/Unfake_Scraper
 
 
