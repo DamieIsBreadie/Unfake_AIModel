@@ -22,7 +22,7 @@ git clone https://github.com/DamieIsBreadie/blockchain_transactions
 git clone https://github.com/DamieIsBreadie/Unfake_Scraper
 
 
-3. Install Dependencies
+2. Install Dependencies
 Typical dependencies include:
 Flask
 Flask-Cors
